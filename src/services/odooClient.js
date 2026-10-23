@@ -1,5 +1,5 @@
-const axios = require('axios');
-const config = require('../config');
+const axios = require("axios");
+const config = require("../config");
 
 /**
  * Talks to the bh_management_dashboard Odoo controller
@@ -13,13 +13,13 @@ const config = require('../config');
 const odoo = axios.create({
   baseURL: config.odoo.baseUrl,
   timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { "Content-Type": "application/json" },
 });
 
 class OdooError extends Error {
-  constructor(message, { status = 502, code = 'odoo_error' } = {}) {
+  constructor(message, { status = 502, code = "odoo_error" } = {}) {
     super(message);
-    this.name = 'OdooError';
+    this.name = "OdooError";
     this.status = status; // HTTP status the BFF should reply with
     this.code = code; // machine-readable error code
   }
@@ -36,43 +36,59 @@ async function callJsonRpc(path, params = {}, apiKey = null) {
   try {
     response = await odoo.post(
       path,
-      { jsonrpc: '2.0', method: 'call', params },
-      { headers: apiKey ? { 'API-KEY': apiKey } : {} },
+      { jsonrpc: "2.0", method: "call", params },
+      { headers: apiKey ? { "API-KEY": apiKey } : {} },
     );
   } catch (err) {
     if (err.response) {
       // Odoo route doesn't exist yet, or 500'd, etc.
       throw new OdooError(
         `Odoo returned HTTP ${err.response.status} for ${path}`,
-        { status: 502, code: 'odoo_http_error' },
+        { status: 502, code: "odoo_http_error" },
       );
     }
     // Network-level failure — Odoo down, wrong ODOO_BASE_URL, etc.
     throw new OdooError(`Could not reach Odoo at ${path}: ${err.message}`, {
       status: 503,
-      code: 'odoo_unreachable',
+      code: "odoo_unreachable",
     });
   }
 
   // Route-level exception inside Odoo shows up as response.data.error
   if (response.data?.error) {
     const message =
-      response.data.error?.data?.message || 'Odoo returned an error';
-    throw new OdooError(message, { status: 502, code: 'odoo_route_error' });
+      response.data.error?.data?.message || "Odoo returned an error";
+    throw new OdooError(message, { status: 502, code: "odoo_route_error" });
   }
 
   const result = response.data?.result;
 
   // Our own controller's {error: '...'} shape (invalid_credentials, etc.)
   if (result?.error) {
-    throw new OdooError(result.error, { status: 401, code: result.error });
+    // Approve/Reject failures are not authentication problems: give them
+    // their own status and keep Odoo's human explanation (`message`), so
+    // the app can show e.g. "not your order to decide" instead of a code.
+    const status =
+      {
+        not_authorized: 403,
+        order_not_found: 404,
+        missing_order_id: 400,
+        action_failed: 502,
+        proof_not_found: 404,
+        missing_proof_id: 400,
+        proof_too_large: 413,
+      }[result.error] || 401;
+    throw new OdooError(result.message || result.error, {
+      status,
+      code: result.error,
+    });
   }
 
   return result;
 }
 
 async function login(loginEmail, password) {
-  return callJsonRpc('/bh_dashboard/mobile/login', {
+  return callJsonRpc("/bh_dashboard/mobile/login", {
     login: loginEmail,
     password,
     db: config.odoo.db,
@@ -80,12 +96,12 @@ async function login(loginEmail, password) {
 }
 
 async function whoAmI(apiKey) {
-  return callJsonRpc('/bh_dashboard/mobile/whoami', {}, apiKey);
+  return callJsonRpc("/bh_dashboard/mobile/whoami", {}, apiKey);
 }
 
 async function getDashboardData(apiKey, dateFrom, dateTo) {
   return callJsonRpc(
-    '/bh_dashboard/mobile/get_data',
+    "/bh_dashboard/mobile/get_data",
     { date_from: dateFrom, date_to: dateTo },
     apiKey,
   );
@@ -98,7 +114,7 @@ async function getDashboardData(apiKey, dateFrom, dateTo) {
 // odoo_http_error rather than a silent failure.
 async function approveOrder(apiKey, orderId, note) {
   return callJsonRpc(
-    '/bh_dashboard/mobile/approvals/approve',
+    "/bh_dashboard/mobile/approvals/approve",
     { order_id: orderId, note },
     apiKey,
   );
@@ -106,8 +122,18 @@ async function approveOrder(apiKey, orderId, note) {
 
 async function rejectOrder(apiKey, orderId, reason) {
   return callJsonRpc(
-    '/bh_dashboard/mobile/approvals/reject',
+    "/bh_dashboard/mobile/approvals/reject",
     { order_id: orderId, reason },
+    apiKey,
+  );
+}
+
+// Payment slip of an order (base64 file). Served by the Odoo module
+// accounting_so_invoice_bridge (controllers/mobile_proofs.py).
+async function getProofFile(apiKey, proofId) {
+  return callJsonRpc(
+    "/bh_dashboard/mobile/approvals/proof_file",
+    { proof_id: proofId },
     apiKey,
   );
 }
@@ -119,4 +145,5 @@ module.exports = {
   getDashboardData,
   approveOrder,
   rejectOrder,
+  getProofFile,
 };
