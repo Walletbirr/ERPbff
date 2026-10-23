@@ -17,6 +17,7 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "mupdf": "^1.28.1",
     "uuid": "^11.0.5"
   },
   "devDependencies": {
