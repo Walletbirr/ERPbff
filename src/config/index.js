@@ -25,6 +25,18 @@ const config = {
   sessionTtlMs:
     parseInt(process.env.SESSION_TTL_HOURS || '12', 10) * 60 * 60 * 1000,
 
+  push: {
+    // Shared secret Odoo sends in the X-Push-Secret header when it asks the
+    // BFF to push. Empty = the webhook is disabled (never open by default).
+    webhookSecret: process.env.PUSH_WEBHOOK_SECRET || '',
+    // Optional: only needed if "Enhanced push security" is enabled for the
+    // project in the Expo dashboard.
+    expoAccessToken: process.env.EXPO_ACCESS_TOKEN || '',
+    // Device tokens must survive restarts (sessions don't), so they live in
+    // a small JSON file.
+    storePath: process.env.PUSH_TOKEN_STORE || 'data/push-tokens.json',
+  },
+
   corsOrigins: (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())
