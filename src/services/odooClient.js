@@ -77,6 +77,8 @@ async function callJsonRpc(path, params = {}, apiKey = null) {
         proof_not_found: 404,
         missing_proof_id: 400,
         proof_too_large: 413,
+        missing_partner_id: 400,
+        partner_not_found: 404,
       }[result.error] || 401;
     throw new OdooError(result.message || result.error, {
       status,
@@ -138,8 +140,19 @@ async function getProofFile(apiKey, proofId) {
   );
 }
 
+// One customer's credit history (customer_credit_report, served by
+// accounting_so_invoice_bridge controllers/mobile_credit.py).
+async function getCustomerCredit(apiKey, partnerId) {
+  return callJsonRpc(
+    "/bh_dashboard/mobile/credit/customer",
+    { partner_id: partnerId },
+    apiKey,
+  );
+}
+
 module.exports = {
   OdooError,
+  getCustomerCredit,
   login,
   whoAmI,
   getDashboardData,
