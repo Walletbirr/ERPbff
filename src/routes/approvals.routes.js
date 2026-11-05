@@ -8,11 +8,13 @@ const {
   proofPdfPage,
 } = require("../controllers/approvals.controller");
 const { requireAuth } = require("../middleware/auth.middleware");
+const { idempotent } = require("../middleware/idempotency");
 
 const router = express.Router();
 
-router.post("/:orderId/approve", requireAuth, approveOrder);
-router.post("/:orderId/reject", requireAuth, rejectOrder);
+// idempotent: a repeated tap after a network drop is decided only once.
+router.post("/:orderId/approve", requireAuth, idempotent, approveOrder);
+router.post("/:orderId/reject", requireAuth, idempotent, rejectOrder);
 
 // Payment slip: ask for a short-lived link (Bearer auth), then open it.
 // The file route is authenticated by the token inside the link itself.

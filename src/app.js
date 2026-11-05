@@ -2,6 +2,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
 const morgan = require("morgan");
+const compression = require("compression");
 
 const config = require("./config");
 const { apiLimiter } = require("./middleware/rateLimiter");
@@ -23,7 +24,39 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
-app.use(morgan(config.nodeEnv === "production" ? "combined" : "dev"));
+// For the speed log: how big each JSON answer is before compression, and
+// how many bytes really went to the phone after it.
+app.use((req, res, next) => {
+  const start = req.socket.bytesWritten;
+  res.locals.sentStart = start;
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    try {
+      res.locals.rawBytes = Buffer.byteLength(JSON.stringify(body));
+    } catch (e) {
+      res.locals.rawBytes = undefined;
+    }
+    return json(body);
+  };
+  next();
+});
+// Smaller answers on weak networks: JSON is gzip-compressed (about 70-80%
+// less data). Pictures / PDFs are left as they are.
+app.use(compression());
+// One line per request with its time and size (for measuring speed). Only
+// method, path, status, bytes and milliseconds: no customer data, no token.
+morgan.token("path-only", (req) => (req.originalUrl || "").split("?")[0]);
+morgan.token("raw", (req, res) =>
+  res.locals.rawBytes === undefined ? "-" : String(res.locals.rawBytes),
+);
+morgan.token("sent", (req, res) =>
+  String(Math.max(0, req.socket.bytesWritten - (res.locals.sentStart || 0))),
+);
+app.use(
+  morgan(
+    ":date[iso] :method :path-only :status json=:raw sent=:sent :response-time ms :res[x-cache] :res[etag]",
+  ),
+);
 app.use("/api", apiLimiter);
 
 app.get("/health", (req, res) =>

@@ -12,7 +12,8 @@ const config = require("../config");
 
 const odoo = axios.create({
   baseURL: config.odoo.baseUrl,
-  timeout: 15000,
+  // Big date ranges can take Odoo a while; ODOO_TIMEOUT_MS overrides it.
+  timeout: parseInt(process.env.ODOO_TIMEOUT_MS || "30000", 10),
   headers: { "Content-Type": "application/json" },
 });
 
