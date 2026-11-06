@@ -17,6 +17,17 @@ const { deviceRouter, internalRouter } = require("./routes/push.routes");
 const app = express();
 
 app.disable("x-powered-by");
+// The production BFF sits behind a reverse proxy (HTTPS, e.g. nginx): trust
+// the X-Forwarded-For it adds so the rate limiter sees each phone's real
+// address instead of the proxy's (otherwise all managers share one limit).
+// Default: proxies on this machine or the local network. TRUST_PROXY in
+// .env overrides it (e.g. "1" = exactly one proxy in front).
+const trustProxy =
+  process.env.TRUST_PROXY || "loopback, linklocal, uniquelocal";
+app.set(
+  "trust proxy",
+  /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy,
+);
 app.use(helmet());
 app.use(
   cors({
